@@ -5,14 +5,6 @@ import pulumi_oci as oci
 config = pulumi.Config()
 compartment_ocid = config.require_secret('compartmentOcid')
 
-# artifacts/registry
-registry = oci.artifacts.ContainerRepository(
-    "container-repo",
-    display_name="laura-container-repo",
-    compartment_id=compartment_ocid,
-    is_public=True
-)
-
 # networking
 vcn = oci.core.Vcn(
     "vcn",
@@ -32,105 +24,10 @@ internet_gateway = oci.core.InternetGateway(
     vcn_id=vcn.id
 )
 
-service_gateway = oci.core.ServiceGateway(
-    "service_gateway",
-    compartment_id=compartment_ocid,
-    services=[oci.core.ServiceGatewayServiceArgs(
-        service_id=oci.core.get_services().services[1].id,
-    )],
-    vcn_id=vcn.id
-)
-
-svc_lb_seclist = oci.core.SecurityList(
-    "svc_lb_security_list",
-    compartment_id=compartment_ocid,
-    vcn_id=vcn.id
-)
-
-node_seclist = oci.core.SecurityList(
-    "node_security_list",
-    compartment_id=compartment_ocid,
-    egress_security_rules=[
-        oci.core.SecurityListEgressSecurityRuleArgs(
-            description="Worker Nodes access to Internet",
-            destination="0.0.0.0/0",
-            destination_type="CIDR_BLOCK",
-            protocol="all",
-        ),
-        oci.core.SecurityListEgressSecurityRuleArgs(
-            description="Path discovery",
-            destination="10.0.0.0/28",
-            destination_type="CIDR_BLOCK",
-            icmp_options=oci.core.SecurityListEgressSecurityRuleIcmpOptionsArgs(
-                code=4,
-                type=3,
-            ),
-            protocol="1",
-        ),
-    ],
-    ingress_security_rules=[
-        oci.core.SecurityListIngressSecurityRuleArgs(
-            description="Path discovery",
-            icmp_options=oci.core.SecurityListIngressSecurityRuleIcmpOptionsArgs(
-                code=4,
-                type=3,
-            ),
-            protocol="1",
-            source="10.0.0.0/28",
-            source_type="CIDR_BLOCK",
-        ),
-        oci.core.SecurityListIngressSecurityRuleArgs(
-            description="Inbound SSH traffic to worker nodes",
-            protocol="6",
-            source="0.0.0.0/0",
-            source_type="CIDR_BLOCK",
-            tcp_options=oci.core.SecurityListIngressSecurityRuleTcpOptionsArgs(
-                max=22,
-                min=22,
-            ),
-        ),
-    ],
-    vcn_id=vcn.id
-)
-
-node_route_table = oci.core.RouteTable(
-    "oke_node_route_table",
-    compartment_id=compartment_ocid,
-    route_rules=[
-        oci.core.RouteTableRouteRuleArgs(
-            description="traffic to OCI services",
-            destination="all-phx-services-in-oracle-services-network",
-            destination_type="SERVICE_CIDR_BLOCK",
-            network_entity_id=service_gateway.id,
-        ),
-        oci.core.RouteTableRouteRuleArgs(
-            description="traffic to the internet",
-            destination="0.0.0.0/0",
-            destination_type="CIDR_BLOCK",
-            network_entity_id=nat_gateway.id,
-        ),
-    ],
-    vcn_id=vcn.id
-)
-
-svc_lb_route_table = oci.core.RouteTable(
-    "oke_svclb_route_table",
-    compartment_id=compartment_ocid,
-    route_rules=[oci.core.RouteTableRouteRuleArgs(
-        description="traffic to/from internet",
-        destination="0.0.0.0/0",
-        destination_type="CIDR_BLOCK",
-        network_entity_id=internet_gateway.id,
-    )],
-    vcn_id=vcn.id
-)
-
 node_subnet = oci.core.Subnet(
     "node_subnet",
     cidr_block="10.0.10.0/24",
     compartment_id=compartment_ocid,
-    route_table_id=node_route_table.id,
-    security_list_ids=[node_seclist.id],
     vcn_id=vcn.id
 )
 
